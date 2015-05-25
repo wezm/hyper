@@ -96,7 +96,14 @@ impl Read for Response {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         let count = try!(self.body.read(buf));
 
-        if count == 0 {
+        let remaining = match self.body {
+            SizedReader(_,rem) => Some(rem),
+            ChunkedReader(_, None) => None, // Don't know how to handle this one
+            ChunkedReader(_, Some(rem)) => Some(rem),
+            _ => None,
+        };
+
+        if count == 0 && remaining.map_or(true, |rem| rem == 0) {
             if !http::should_keep_alive(self.version, &self.headers) {
                 try!(self.body.get_mut().get_mut().close(Shutdown::Both));
             }
